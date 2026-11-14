@@ -1,6 +1,6 @@
 {
-  "name": "Firewood \u2014 free wood nearby",
-  "short_name": "Firewood",
+  "name": "Free Stuff — spotted nearby",
+  "short_name": "Free Stuff",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
@@ -29,15 +29,19 @@
       "purpose": "maskable"
     }
   ],
-  "description": "Find and share free firewood with a photo and a public pickup pin.",
+  "description": "Contactless free-stuff sightings with a fresh photo, capture time and GPS spot.",
   "permissions": [
     {
       "name": "location",
-      "reason": "Find nearby firewood or choose a public pickup spot."
+      "reason": "Record a fresh GPS position when a sighting photo is captured."
     },
     {
       "name": "camera",
-      "reason": "Take a photo of the firewood you are offering."
+      "reason": "Take a fresh photo of free items at your current location."
+    },
+    {
+      "name": "microphone",
+      "reason": "Optionally dictate a text note."
     }
   ]
 }

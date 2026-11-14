@@ -223,3 +223,13 @@ img, video, canvas { max-width: 100%; }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 
 }
+
+@layer components {
+.sighting-camera { display: grid; gap: .75rem; }
+.sighting-camera video, .sighting-preview { width: 100%; max-height: 28rem; object-fit: contain; border-radius: .75rem; background: var(--panel); }
+.sighting-camera .sighting-camera-start { min-height: 14rem; display: grid; place-content: center; gap: .75rem; border: 2px dashed var(--line-strong); background: var(--panel); text-align: center; }
+.sighting-camera-start span { font-size: 2rem; }
+.sighting-camera-start small, .sighting-capture-meta, .sighting-timestamp { font-size: .75rem; color: var(--muted); }
+.sighting-timestamp { display: grid; gap: .4rem; margin: .7rem 0; line-height: 1.5; }
+.sighting-capture-meta { line-height: 1.7; }
+}

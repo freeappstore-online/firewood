@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { available, boundingBox, DAY, directions, distance, isListing, photoSource, type Listing } from './listings';
+import { available, boundingBox, DAY, directions, distance, isListing, photoSource, captureLabel, SIGHTING_LIFETIME, type Listing } from './listings';
 const point = { lat: -37.81, lon: 144.96 };
 const listing = { ...point, id: 'post-1', title: 'Free gum', locality: 'Brunswick', notes: 'Beside the gate', quantity: 'A trailer load', woodType: 'Hardwood', photoId: '12345678-1234-1234-1234-123456789abc', photoUrl: 'https://untrusted.example/tracker', expiresAt: Date.now() + DAY, collected: false } as Listing;
 
@@ -17,6 +17,14 @@ describe('discovery and public listing validation', () => {
     expect(isListing(null)).toBe(false);
     expect(photoSource(listing.photoId)).toContain('https://api.freeappstore.online/v1/apps/firewood/photos/');
     expect(photoSource(listing.photoId)).not.toContain('untrusted');
+  });
+  it('distinguishes live capture from legacy upload time and keeps sightings short-lived', () => {
+    const fresh = { ...listing, kind: 'sighting' as const, capturedAt: 1700000000000, accuracy: 12 };
+    expect(captureLabel(fresh)).toMatch(/^Photo taken /);
+    expect(captureLabel({ ...listing, _createdAt: 1700000000000 })).toMatch(/^Posted /);
+    expect(captureLabel({ ...listing, _createdAt: undefined })).toBe('Capture time not recorded');
+    expect(isListing({ ...fresh, accuracy: -1 })).toBe(false);
+    expect(SIGHTING_LIFETIME).toBe(2 * DAY);
   });
   it('measures distances and makes a bounding box containing the search center', () => {
     expect(distance(point, point)).toBe(0);

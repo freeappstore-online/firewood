@@ -1,22 +1,26 @@
-# Firewood
+# Free Stuff
 
-Free firewood listings: a small photo, public pickup pin, nearby search and
-owner-managed collection status. Built with the FreeAppStore SDK.
+Contactless sightings of free items nearby: a fresh camera photo, capture time,
+GPS location and optional note. No public profile, contact fields, messages,
+reservations or negotiations. The original Firewood URL remains valid.
 
-- App: https://firewood.freeappstore.online
-- `pnpm install && pnpm dev`
-- `pnpm build`, `pnpm typecheck`, `pnpm test`, `fas check`
-- Browser journeys: `pnpm exec playwright install chromium && pnpm test:browser`
-  (build first; the test starts its own preview and mocks the API locally)
-- Deploy: push directly to `main`.
+App: https://firewood.freeappstore.online
 
-Uses the shared public-read `listings` collection (`fas db share listings`).
-Posting and managing listings require sign-in. Each upload uses `fas.photos`:
-640 px, 200 KB maximum, public opt-in and 90-day expiry. The listing uses the
-photo's server-issued expiry and disappears from discovery when expired or
-collected. Marking collected/removing a post deletes its photo immediately.
-Listing metadata persists under the platform collection quota; expiry hides it
-from discovery, and its owner can remove it from My posts.
+`pnpm install && pnpm dev`; checks: `pnpm build`, `pnpm typecheck`, `pnpm test`,
+`pnpm test:browser` (build first; requires Playwright Chromium), `fas check`.
+Push directly to main to deploy.
 
-Maps load only when requested or when posting. Tiles are provided by
-OpenStreetMap; directions open Google Maps. No payments, ads or analytics SDKs.
+The camera uses `getUserMedia`, asks for a fresh GPS fix at capture, records
+capture time separately from server-created posting time, and shows GPS accuracy.
+Gallery imports and manual pins are unavailable for new sightings. Device-supplied
+time/location are not certified proof. Dictated text notes are optional on browsers
+supporting speech recognition; no audio is stored.
+
+Uses FAS public-read `listings` and `fas.photos`: 640 px, 200 KB maximum, explicit
+public photo uploads and 90-day storage retention. New sightings expire after
+48 hours and are hidden from discovery. Legacy Firewood posts remain compatible;
+their upload time is labelled Posted, never Photo taken. Owners can mark a sighting
+gone or remove it, deleting the photo. Text metadata remains under collection quotas.
+
+For paid items and private seller conversations, use
+https://classifieds.proappstore.online.

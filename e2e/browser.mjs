@@ -13,21 +13,21 @@ try {
     if (i === 99) throw new Error('Preview did not start');
     await new Promise((r) => setTimeout(r, 100));
   }
-  browser = await chromium.launch();
+  browser = await chromium.launch({ args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] });
   const user = { id: 'test-user', login: 'neighbour', avatarUrl: null, roles: ['user'] };
   const photoId = '12345678-1234-1234-1234-123456789abc';
-  const make = (id, extra = {}) => ({ id, title: 'Gum beside the gate', locality: 'Brunswick, VIC', notes: 'Collect from the verge during daylight.', quantity: 'A trailer load', woodType: 'Hardwood', lat: -37.76, lon: 144.96, photoId, photoUrl: 'https://untrusted.example/tracker', expiresAt: Date.now() + 86400000, collected: false, _createdAt: Date.now(), _owner: user.id, ...extra });
+  const make = (id, extra = {}) => ({ id, title: 'Gum beside the gate', locality: 'Brunswick, VIC', notes: 'Collect from the verge during daylight.', quantity: 'A trailer load', woodType: 'Hardwood', lat: -37.76, lon: 144.96, kind: 'sighting', capturedAt: Date.now() - 60000, accuracy: 12, photoId, photoUrl: 'https://untrusted.example/tracker', expiresAt: Date.now() + 86400000, collected: false, _createdAt: Date.now(), _owner: user.id, ...extra });
   let listings = [make('active'), make('expired', { title: 'Expired pile', expiresAt: 1 }), make('collected', { title: 'Collected pile', collected: true })];
-  let uploadBytes = 0, uploads = 0, deletes = 0;
+  let uploadBytes = 0, uploads = 0, deletes = 0, postedCount = 0;
   const errors = [];
-  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block', geolocation: { latitude: -37.76, longitude: 144.96 }, permissions: ['geolocation'] });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block', geolocation: { latitude: -37.76, longitude: 144.96, accuracy: 12 }, permissions: ['geolocation', 'camera'] });
   const page = await context.newPage(); page.on('pageerror', (error) => errors.push(error.message));
   await context.route('https://api.freeappstore.online/**', async (route) => {
     const request = route.request(), url = new URL(request.url()), method = request.method();
     const json = (data, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
     if (url.pathname === '/v1/auth/me') return json(user);
     if (url.pathname.endsWith('/db/listings')) {
-      if (method === 'POST') { const data = JSON.parse(request.postData()); listings.push(make('new-post', data)); return json({ ...data, id: 'new-post' }, 201); }
+      if (method === 'POST') { const data = JSON.parse(request.postData()); listings.push(make(postedCount++ === 0 ? 'new-post' : `new-post-${postedCount}`, data)); return json({ ...data, id: 'new-post' }, 201); }
       return json({ documents: listings, total: listings.length });
     }
     if (url.pathname.includes('/db/listings/')) {
@@ -52,40 +52,57 @@ try {
   assert.equal(await page.getByRole('heading', { name: 'Expired pile' }).count(), 0);
   assert.equal(await page.getByRole('heading', { name: 'Collected pile' }).count(), 0);
   await page.getByRole('button', { name: 'Near me' }).click();
-  await page.getByText('1 spot within 25 km').waitFor();
+  await page.getByText('1 sighting within 5 km').waitFor();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   await page.getByRole('button', { name: 'Map', exact: true }).click();
   await page.getByRole('region', { name: 'Available firewood locations' }).waitFor();
   await page.screenshot({ path: '/tmp/firewood-mobile-list.png', fullPage: true });
   // Sign-in gate, then real browser image compression, posting and owner actions.
-  await page.goto(`${base}/post`); await page.getByRole('heading', { name: 'Join your local wood pile.' }).waitFor();
+  await page.goto(`${base}/post`); await page.getByRole('heading', { name: 'Sign in once. Share a spot.' }).waitFor();
   await page.evaluate((value) => localStorage.setItem('fas:session', JSON.stringify({ token: 'synthetic', user: value })), user);
-  await page.reload(); await page.getByLabel('Listing title').waitFor();
-  const bytes = await page.evaluate(async () => {
-    const canvas = document.createElement('canvas'); canvas.width = 2400; canvas.height = 1800;
-    const ctx = canvas.getContext('2d'); ctx.fillStyle = '#805030'; ctx.fillRect(0, 0, 2400, 1800);
-    return Array.from(new Uint8Array(await (await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg'))).arrayBuffer()));
-  });
-  await page.getByLabel('Photo of the firewood').setInputFiles({ name: 'wood.jpg', mimeType: 'image/jpeg', buffer: Buffer.from(bytes) });
-  await page.getByLabel('Listing title').fill('Free wood from our fallen tree');
-  await page.getByLabel('Suburb / town').fill('Brunswick, VIC');
-  await page.getByRole('button', { name: 'Use my current location' }).click();
-  await page.waitForFunction(() => document.querySelector('input[min="-90"]')?.value === '-37.76');
-  await page.getByLabel('Latitude', { exact: true }).inputValue().then((value) => assert.equal(Number(value), -37.76));
-  await page.getByLabel('Pickup notes').fill('On the verge, take what you need during daylight.');
-  await page.screenshot({ path: '/tmp/firewood-mobile-post.png', fullPage: true });
-  await page.getByRole('button', { name: 'Post free wood →' }).click();
-  await page.getByRole('heading', { name: 'Your wood, shared.' }).waitFor();
-  const card = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Free wood from our fallen tree' }) });
-  await card.getByRole('button', { name: 'Mark collected' }).click();
-  await card.getByText('Collected', { exact: true }).waitFor();
+  await page.reload(); await page.getByRole('button', { name: 'Take a photo', exact: false }).waitFor();
+  assert.equal(await page.locator('input[type=file]').count(), 0, 'fresh sightings cannot import a gallery file');
+  assert.equal(await page.getByLabel('Listing title').count(), 0, 'no required listing form');
+  await page.getByRole('button', { name: 'Take a photo', exact: false }).click();
+  await page.getByRole('button', { name: 'Take photo here', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Take photo here', exact: true }).click();
+  await page.getByText('GPS recorded · accuracy ±12 m').waitFor();
+  await page.getByLabel('Optional note').fill('Two chairs by the gate. One has a loose leg.');
+  await page.screenshot({ path: '/tmp/free-stuff-mobile-capture.png', fullPage: true });
+  await page.getByRole('button', { name: 'Post sighting', exact: true }).click();
+  await page.getByRole('heading', { name: 'Your sightings.' }).waitFor();
+  const posted = listings.find((x) => x.id === 'new-post');
+  assert.equal(posted.kind, 'sighting');
+  assert.equal(posted.lat, -37.76); assert.equal(posted.lon, 144.96); assert.equal(posted.accuracy, 12);
+  assert.ok(Math.abs(Date.now() - posted.capturedAt) < 60000);
+  assert.equal(posted.expiresAt - posted.capturedAt, 2 * 86400000);
+  for (const key of ['contact', 'email', 'phone', 'name', 'seller']) assert.equal(key in posted, false);
+  const card = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Two chairs by the gate. One has a loose leg.' }) });
+  assert.match(await card.innerText(), /Photo taken/); assert.match(await card.innerText(), /GPS accuracy ±12 m/);
+  assert.equal(await card.locator('a[href^="mailto:"],a[href^="tel:"]').count(), 0);
+  await card.getByRole('button', { name: 'It’s gone' }).click();
+  await card.getByText('Gone', { exact: true }).waitFor();
   assert.equal(listings.find((x) => x.id === 'new-post').collected, true);
-  await page.waitForTimeout(100);
-  assert.ok(deletes >= 1);
+  await page.waitForTimeout(100); assert.ok(deletes >= 1);
+  // A photo and location are sufficient: the note is genuinely optional.
+  await page.goto(`${base}/post`);
+  await page.getByRole('button', { name: 'Take a photo', exact: false }).click();
+  await page.getByRole('button', { name: 'Take photo here', exact: true }).click();
+  await page.getByText('GPS recorded · accuracy ±12 m').waitFor();
+  await page.getByRole('button', { name: 'Post sighting', exact: true }).click();
+  await page.getByRole('heading', { name: 'Free stuff spotted', exact: true }).waitFor();
+  assert.equal(listings.find((x) => x.id === 'new-post-2').notes, '');
+  // Refuse a sighting when location is denied rather than labelling a manual pin as capture GPS.
+  await page.goto(`${base}/post`);
+  await page.evaluate(() => { navigator.geolocation.getCurrentPosition = (_ok, fail) => fail({ code: 1, message: 'denied' }); });
+  await page.getByRole('button', { name: 'Take a photo', exact: false }).click();
+  await page.getByRole('button', { name: 'Take photo here', exact: true }).click();
+  await page.getByRole('alert').filter({ hasText: 'Allow location access' }).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Post sighting', exact: true }).isDisabled(), true);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(base); await page.getByRole('heading', { name: 'Gum beside the gate' }).waitFor();
   await page.screenshot({ path: '/tmp/firewood-desktop.png', fullPage: true });
   await page.emulateMedia({ colorScheme: 'dark' });
   assert.equal(external.length, 0); assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ result: 'passed', journeys: ['public discovery', 'expiry and collected filters', 'nearby search', 'map', 'signed-out gate', 'camera-size compression', 'public post', 'owner marks collected', 'mobile and desktop layout'], uploads, uploadBytes, deletes }));
+  console.log(JSON.stringify({ result: 'passed', journeys: ['public discovery', 'expiry and collected filters', 'nearby search', 'map', 'signed-out gate', 'live camera capture', 'fresh GPS and capture time', 'optional note only', 'no contact fields', 'public sighting', 'location denial prevents posting', 'owner marks gone', 'mobile and desktop layout'], uploads, uploadBytes, deletes }));
 } finally { await browser?.close(); server.kill(); }
