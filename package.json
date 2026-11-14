@@ -1,0 +1,21 @@
+{
+  "name": "firewood",
+  "private": true,
+  "packageManager": "pnpm@10.30.3",
+  "engines": {
+    "node": ">=22"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp"
+    ]
+  },
+  "scripts": {
+    "dev": "pnpm --filter @firewood/web dev",
+    "build": "pnpm --filter @firewood/web build",
+    "preview": "pnpm --filter @firewood/web preview",
+    "typecheck": "pnpm --filter @firewood/web exec tsc -b",
+    "test": "pnpm --filter @firewood/web test"
+  }
+}
